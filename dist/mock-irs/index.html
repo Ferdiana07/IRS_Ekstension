@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mock IRS UNDIP — Simulator</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #7d8590; --dim: #8b949e;
+      --green: #3fb950; --red: #f85149; --yellow: #d29922;
+      --blue: #388bfd; --purple: #bc8cff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-size: 13px;
+    }
+
+    /* ── Test Controls ─────────────────────────────────── */
+    .test-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .test-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all .15s;
+    }
+
+    .test-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+    /* ── IRS Table ─────────────────────────────────────── */
+    .irs-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .irs-table th {
+      background: #0d1117;
+      padding: 12px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .irs-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .irs-table tr:last-child td { border-bottom: none; }
+
+    .irs-table tr[data-mock-course-row]:hover td { background: rgba(255,255,255,.02); }
+
+    /* Course name */
+    .course-name { font-weight: 600; color: var(--text); }
+    .course-class { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Quota */
+    .quota {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--dim);
+    }
+
+    /* Status badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .status-badge.available { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+    .status-badge.full      { background: rgba(248,81,73,.12);  color: var(--red);   border: 1px solid rgba(248,81,73,.25); }
+    .status-badge.selected  { background: rgba(188,140,255,.15);color: var(--purple);border: 1px solid rgba(188,140,255,.3); }
+
+    /* Buttons */
+    .btn-select {
+      padding: 6px 16px;
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all .15s;
+    }
+    .btn-select:hover:not(:disabled) { box-shadow: 0 2px 12px rgba(56,139,253,.4); }
+    .btn-select:disabled {
+      background: var(--border);
+      color: var(--muted);
+      cursor: not-allowed;
+    }
+
+    .selected-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: rgba(63,185,80,.15);
+      border: 1px solid rgba(63,185,80,.3);
+      border-radius: 6px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* ── Modal ─────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-radius: 14px;
+      padding: 28px;
+      min-width: 360px;
+      max-width: 440px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.6);
+      animation: modalIn .2s ease;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.95) translateY(-10px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-title {
+      font-size: 17px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .modal-body {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .modal-body strong { color: var(--text); }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-modal {
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all .15s;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-cancel:hover { color: var(--text); border-color: var(--dim); }
+
+    .btn-confirm {
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      color: white;
+      box-shadow: 0 2px 12px rgba(56,139,253,.3);
+    }
+    .btn-confirm:hover { box-shadow: 0 2px 20px rgba(56,139,253,.5); }
+
+    /* ── Toast ─────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 2000;
+      opacity: 0;
+      transform: translateX(20px);
+      transition: all .3s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(0); }
+    .toast.success { background: rgba(63,185,80,.2); border: 1px solid rgba(63,185,80,.4); color: var(--green); }
+    .toast.error   { background: rgba(248,81,73,.15); border: 1px solid rgba(248,81,73,.3);  color: var(--red); }
+
+    /* ── Event log ─────────────────────────────────────── */
+    .event-log {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .event-log-title {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .log-line { color: var(--dim); }
+    .log-line.ok   { color: var(--green); }
+    .log-line.fail { color: var(--red); }
+    .log-line.info { color: var(--blue); }
+
+    /* ── Scenario label ─────────────────────────────────── */
+    .scenario-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎓 Mock IRS UNDIP</h1>
+<p class="subtitle">Simulasi halaman IRS untuk testing IRS WAR ASSISTANT extension · <strong>bukan halaman asli UNDIP</strong></p>
+
+<!-- Test scenario controls -->
+<div class="test-controls">
+  <strong style="font-size:12px;color:var(--muted);align-self:center">Skenario:</strong>
+  <button class="test-btn" onclick="applyScenario('normal')">① Normal (Ada Tersedia)</button>
+  <button class="test-btn" onclick="applyScenario('all-full')">② Semua Penuh</button>
+  <button class="test-btn" onclick="applyScenario('class-fallback')">③ Kelas A Penuh → B</button>
+  <button class="test-btn" onclick="applyScenario('already-selected')">④ Sudah Terpilih</button>
+  <button class="test-btn" onclick="applyScenario('late-modal')">⑤ Modal Lambat</button>
+  <button class="test-btn" onclick="applyScenario('wrong-modal')">⑥ Modal Salah (Mismatch)</button>
+  <button class="test-btn" onclick="applyScenario('dynamic-dom')">⑨ DOM Dinamis</button>
+</div>
+
+<p class="scenario-label" id="scenario-desc">Skenario aktif: Normal — semua kelas tersedia</p>
+
+<!-- IRS Table -->
+<table class="irs-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Mata Kuliah</th>
+      <th>Kelas</th>
+      <th>SKS</th>
+      <th>Kuota</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody id="irs-tbody">
+    <!-- Populated by JS -->
+  </tbody>
+</table>
+
+<!-- Confirmation Modal -->
+<div class="modal-overlay" id="modal-overlay" data-mock-modal>
+  <div class="modal">
+    <div class="modal-title" data-mock-modal-title>⚠️ Konfirmasi Pemilihan</div>
+    <div class="modal-body" data-mock-modal-body id="modal-body-text">
+      Anda akan memilih:
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal btn-cancel" data-mock-modal-cancel id="btn-modal-cancel">Batal</button>
+      <button class="btn-modal btn-confirm" data-mock-modal-confirm id="btn-modal-confirm">Konfirmasi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Event Log -->
+<div>
+  <div class="event-log-title">📋 Event Log (Mock)</div>
+  <div class="event-log" id="event-log">
+    <div class="log-line info">[MOCK] IRS Simulator ready. Install extension dan buka popup.</div>
+  </div>
+</div>
+
+<script>
+  // ── Courses data ───────────────────────────────────────────────────────────
+  const COURSES = [
+    { id: 'pw',  name: 'Pemrograman Web',             code: 'TIF305', classes: ['A', 'B', 'C'], sks: 3 },
+    { id: 'bd',  name: 'Basis Data',                  code: 'TIF204', classes: ['A', 'B'],       sks: 3 },
+    { id: 'pbo', name: 'Pemrograman Berorientasi Objek', code: 'TIF201', classes: ['A', 'B'],    sks: 3 },
+    { id: 'jarkom', name: 'Jaringan Komputer',        code: 'TIF402', classes: ['A'],             sks: 3 },
+  ];
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const state = {
+    rows: [],      // { id, courseId, className, quota: {cur, max}, status, selected }
+    pendingRow: null, // row awaiting modal confirm
+    modalDelayMs: 0,
+    wrongModalMode: false,
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('irs-tbody');
+    tbody.innerHTML = '';
+
+    state.rows.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      tr.dataset.mockCourseRow = row.id;
+      tr.dataset.mockSelected = row.selected ? 'true' : 'false';
+
+      const statusCls = row.selected ? 'selected' : (row.status === 'available' ? 'available' : 'full');
+      const statusText = row.selected ? '✓ Terpilih' : (row.status === 'available' ? '🟢 Tersedia' : '🔴 Penuh');
+
+      tr.innerHTML = `
+        <td style="color:var(--muted);font-size:12px">${i + 1}</td>
+        <td>
+          <div class="course-name" data-mock-course-name>${row.name}</div>
+          <div class="course-class">${row.code ?? ''}</div>
+        </td>
+        <td style="font-weight:700" data-mock-course-class>${row.className}</td>
+        <td style="color:var(--muted)">${row.sks}</td>
+        <td class="quota" data-mock-course-quota>${row.quota.cur}/${row.quota.max}</td>
+        <td>
+          <span class="status-badge ${statusCls}" data-mock-course-status>
+            ${statusText}
+          </span>
+          ${row.selected ? '<span data-mock-selected></span>' : ''}
+        </td>
+        <td>
+          ${row.selected
+            ? `<div class="selected-badge">✓ Terpilih</div>`
+            : `<button class="btn-select" data-mock-select-btn data-row-id="${row.id}"
+                ${row.status !== 'available' ? 'disabled' : ''}>
+                Pilih
+               </button>`}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Attach click handlers
+    tbody.querySelectorAll('[data-mock-select-btn]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const rowId = e.target.dataset.rowId;
+        handleSelectClick(rowId);
+      });
+    });
+  }
+
+  // ── Select handler ─────────────────────────────────────────────────────────
+  function handleSelectClick(rowId) {
+    const row = state.rows.find((r) => r.id === rowId);
+    if (!row || row.status !== 'available' || row.selected) return;
+
+    state.pendingRow = row;
+    log(`[USER] Klik Pilih: ${row.name} Kelas ${row.className}`, 'info');
+
+    if (state.modalDelayMs > 0) {
+      log(`[MOCK] Modal akan muncul setelah ${state.modalDelayMs}ms...`, 'info');
+      setTimeout(() => showModal(row), state.modalDelayMs);
+    } else {
+      showModal(row);
+    }
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────────────────
+  function showModal(row) {
+    const overlay = document.getElementById('modal-overlay');
+    const bodyEl  = document.getElementById('modal-body-text');
+
+    if (state.wrongModalMode) {
+      // TEST 4: Wrong modal — show different course/class
+      bodyEl.innerHTML = `
+        Anda akan memilih:<br><br>
+        <strong>Mata Kuliah:</strong> Algoritma dan Pemrograman<br>
+        <strong>Kelas:</strong> Z<br><br>
+        <em style="color:var(--red);font-size:11px">⚠ [TEST: Modal sengaja salah]</em>
+      `;
+    } else {
+      bodyEl.innerHTML = `
+        Anda akan memilih:<br><br>
+        <strong>Mata Kuliah:</strong> ${row.name}<br>
+        <strong>Kelas:</strong> ${row.className}<br>
+        <strong>Kuota:</strong> ${row.quota.cur}/${row.quota.max}
+      `;
+    }
+
+    overlay.classList.add('visible');
+    log('[MOCK] Modal konfirmasi muncul', 'info');
+  }
+
+  function hideModal() {
+    document.getElementById('modal-overlay').classList.remove('visible');
+  }
+
+  // Modal buttons
+  document.getElementById('btn-modal-confirm').addEventListener('click', () => {
+    if (!state.pendingRow) return;
+    const row = state.pendingRow;
+
+    if (state.wrongModalMode) {
+      log('[MOCK] Konfirmasi modal SALAH — extension seharusnya tidak klik ini!', 'fail');
+      toast('⚠ Extension klik modal yang salah!', 'error');
+      hideModal();
+      return;
+    }
+
+    // Simulate selection
+    row.selected = true;
+    row.quota.cur += 1;
+    state.pendingRow = null;
+    hideModal();
+    renderTable();
+    log(`[MOCK] ✓ Berhasil memilih: ${row.name} Kelas ${row.className}`, 'ok');
+    toast(`✓ ${row.name} Kelas ${row.className} terpilih!`, 'success');
+  });
+
+  document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+    hideModal();
+    state.pendingRow = null;
+    log('[MOCK] Modal dibatalkan oleh user', 'info');
+  });
+
+  // Click outside modal to close
+  document.getElementById('modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-overlay')) {
+      hideModal();
+      state.pendingRow = null;
+    }
+  });
+
+  // ── Scenarios ──────────────────────────────────────────────────────────────
+  function buildRows(overrides = {}) {
+    state.modalDelayMs = 0;
+    state.wrongModalMode = false;
+    state.rows = [];
+
+    COURSES.forEach((course) => {
+      course.classes.forEach((cls) => {
+        const key = `${course.id}-${cls}`;
+        const override = overrides[key] ?? {};
+        const max = 30;
+        const cur = override.cur ?? 20;
+        const status = override.status ?? (cur < max ? 'available' : 'full');
+        const selected = override.selected ?? false;
+
+        state.rows.push({
+          id: key,
+          courseId: course.id,
+          name: course.name,
+          code: course.code,
+          sks: course.sks,
+          className: cls,
+          quota: { cur, max },
+          status,
+          selected,
+        });
+      });
+    });
+  }
+
+  function applyScenario(scenario) {
+    const desc = document.getElementById('scenario-desc');
+
+    switch (scenario) {
+      case 'normal':
+        buildRows();
+        desc.textContent = 'Skenario: ① Normal — kelas tersedia semua';
+        break;
+
+      case 'all-full':
+        buildRows({
+          'pw-A': { cur: 30, status: 'full' },
+          'pw-B': { cur: 30, status: 'full' },
+          'pw-C': { cur: 30, status: 'full' },
+          'bd-A': { cur: 30, status: 'full' },
+          'bd-B': { cur: 30, status: 'full' },
+          'pbo-A': { cur: 30, status: 'full' },
+          'pbo-B': { cur: 30, status: 'full' },
+        });
+        desc.textContent = 'Skenario: ② Semua Penuh — tidak ada kelas tersedia';
+        break;
+
+      case 'class-fallback':
+        buildRows({
+          'pw-A': { cur: 30, status: 'full' },
+          'bd-A': { cur: 30, status: 'full' },
+          'pbo-A': { cur: 30, status: 'full' },
+        });
+        desc.textContent = 'Skenario: ③ Kelas A Penuh → Extension harus coba Kelas B';
+        break;
+
+      case 'already-selected':
+        buildRows({
+          'pw-A': { selected: true, cur: 21 },
+          'bd-A': { selected: true, cur: 18 },
+        });
+        desc.textContent = 'Skenario: ④ Sudah Terpilih — extension harus SKIP';
+        break;
+
+      case 'late-modal':
+        buildRows();
+        state.modalDelayMs = 2000;
+        desc.textContent = 'Skenario: ⑤ Modal Lambat (2000ms delay) — extension harus tunggu';
+        break;
+
+      case 'wrong-modal':
+        buildRows();
+        state.wrongModalMode = true;
+        desc.textContent = 'Skenario: ⑥ Modal Salah (Mismatch) — extension TIDAK boleh confirm';
+        break;
+
+      case 'dynamic-dom':
+        buildRows({ 'pw-A': { cur: 30, status: 'full' } });
+        desc.textContent = 'Skenario: ⑨ DOM Dinamis — kuota pw-A akan berubah setelah 3 detik';
+        setTimeout(() => {
+          const row = state.rows.find((r) => r.id === 'pw-A');
+          if (row) {
+            row.quota.cur = 29;
+            row.status = 'available';
+            renderTable();
+            log('[MOCK] DOM berubah: pw-A sekarang TERSEDIA (29/30)', 'ok');
+          }
+        }, 3000);
+        break;
+    }
+
+    renderTable();
+    log(`[MOCK] Skenario diterapkan: ${scenario}`, 'info');
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast ${type} show`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── Log ────────────────────────────────────────────────────────────────────
+  function log(text, cls = '') {
+    const panel = document.getElementById('event-log');
+    const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    const div = document.createElement('div');
+    div.className = `log-line ${cls}`;
+    div.textContent = `[${time}] ${text}`;
+    panel.appendChild(div);
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  applyScenario('normal');
+</script>
+</body>
+</html>

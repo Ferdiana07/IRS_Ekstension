@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "IRS WAR ASSISTANT",
+  "version": "1.0.0",
+  "description": "Otomasi pemilihan mata kuliah IRS UNDIP — cepat, aman, tervalidasi.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "IRS WAR ASSISTANT",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://krs.undip.ac.id/*",
+        "https://akademik.undip.ac.id/*",
+        "http://localhost/*",
+        "file:///*"
+      ],
+      "js": ["content/irs.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "notifications",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://krs.undip.ac.id/*",
+    "https://akademik.undip.ac.id/*",
+    "http://localhost/*"
+  ],
+  "commands": {
+    "emergency-stop": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X",
+        "mac": "Command+Shift+X"
+      },
+      "description": "Emergency stop — hentikan semua automation"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "mock-irs/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

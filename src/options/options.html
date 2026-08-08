@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRS WAR ASSISTANT — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-title">🎓 IRS WAR</div>
+      <div class="sidebar-brand-sub">ASSISTANT — Settings</div>
+    </div>
+
+    <div class="nav-item active" data-section="courses">
+      <span class="nav-icon">📚</span> Mata Kuliah
+    </div>
+    <div class="nav-item" data-section="mode">
+      <span class="nav-icon">⚡</span> Mode Otomasi
+    </div>
+    <div class="nav-item" data-section="settings">
+      <span class="nav-icon">⚙️</span> Pengaturan
+    </div>
+    <div class="nav-item" data-section="debug">
+      <span class="nav-icon">🔍</span> Debug
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── SECTION: Courses ────────────────────────────────── -->
+    <section class="section active" id="section-courses">
+      <div class="page-header">
+        <h1 class="page-title">📚 Daftar Target Mata Kuliah</h1>
+        <p class="page-desc">
+          Tambahkan mata kuliah yang ingin dipilih. Urutan prioritas = urutan kelas yang dicoba.<br>
+          Priority 1 = paling utama. Kelas dicoba dari kiri ke kanan (A → B → C).
+        </p>
+      </div>
+
+      <div class="course-list" id="course-list">
+        <!-- Populated by JS -->
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" id="btn-add-course">+ Tambah Mata Kuliah</button>
+      </div>
+    </section>
+
+    <!-- ── SECTION: Mode ──────────────────────────────────── -->
+    <section class="section" id="section-mode">
+      <div class="page-header">
+        <h1 class="page-title">⚡ Mode Otomasi</h1>
+        <p class="page-desc">Pilih seberapa agresif extension mengotomasi proses IRS.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🚀 Pilih Mode</div>
+        <div class="mode-grid">
+
+          <div class="mode-card selected" data-mode="assisted" id="mode-assisted">
+            <div class="mode-card-icon">🤝</div>
+            <div class="mode-card-name">Assisted</div>
+            <div class="mode-card-desc">Select & confirm modal otomatis.<br>Final submit manual.</div>
+          </div>
+
+          <div class="mode-card" data-mode="full" id="mode-full">
+            <div class="mode-card-icon">🚀</div>
+            <div class="mode-card-name">Full Auto</div>
+            <div class="mode-card-desc">Select, confirm, dan final submit otomatis penuh.</div>
+          </div>
+
+          <div class="mode-card" data-mode="safe" id="mode-safe">
+            <div class="mode-card-icon">🛡️</div>
+            <div class="mode-card-name">Safe</div>
+            <div class="mode-card-desc">Select otomatis. Confirm & final submit manual.</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card" id="card-final-submit" style="display:none">
+        <div class="card-title">⚠️ Final IRS Submission (Full Auto)</div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Enable Final Submission</div>
+            <div class="toggle-desc">Otomatis klik "Simpan IRS" setelah semua mata kuliah selesai. Default: OFF</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-final-submit" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="form-group" id="form-countdown" style="margin-top:14px">
+          <label class="form-label" for="input-countdown">Countdown sebelum submit (detik)</label>
+          <input class="form-input" type="number" id="input-countdown" min="3" max="60" value="10" style="width:100px" />
+          <div class="form-hint">Memberikan waktu untuk membatalkan sebelum final submit.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION: Settings ──────────────────────────────── -->
+    <section class="section" id="section-settings">
+      <div class="page-header">
+        <h1 class="page-title">⚙️ Pengaturan</h1>
+        <p class="page-desc">Timing, retry, notifikasi, dan preferensi lainnya.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⏱️ Timing</div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-scan-interval">Scan Interval (ms)</label>
+          <input class="form-input" type="number" id="input-scan-interval" min="100" max="5000" value="500" style="width:120px" />
+          <div class="form-hint">Interval polling fallback antara siklus scan. Default: 500ms</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-confirm-timeout">Confirmation Timeout (ms)</label>
+          <input class="form-input" type="number" id="input-confirm-timeout" min="500" max="15000" value="3000" style="width:120px" />
+          <div class="form-hint">Waktu tunggu modal konfirmasi. Default: 3000ms</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-max-retries">Max Retries per Course</label>
+          <input class="form-input" type="number" id="input-max-retries" min="1" max="10" value="3" style="width:80px" />
+          <div class="form-hint">Setelah N kegagalan, mata kuliah ditandai FAILED.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔔 Notifikasi</div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Suara</div>
+            <div class="toggle-desc">Putar suara saat success/failure</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-sound" checked />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Notifikasi Chrome</div>
+            <div class="toggle-desc">Tampilkan desktop notification</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-notifications" checked />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION: Debug ─────────────────────────────────── -->
+    <section class="section" id="section-debug">
+      <div class="page-header">
+        <h1 class="page-title">🔍 Developer / Debug Mode</h1>
+        <p class="page-desc">Aktifkan mode debug untuk melihat detail selector, state, dan DOM.</p>
+      </div>
+
+      <div class="card">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">Debug Mode</div>
+            <div class="toggle-desc">Tampilkan log DEBUG di popup dan console</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-debug" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Informasi</div>
+        <div style="font-size:12px;color:var(--clr-text-dim);line-height:1.8">
+          <div>Extension: <strong style="color:var(--clr-text)">IRS WAR ASSISTANT v1.0.0</strong></div>
+          <div>Manifest: <strong style="color:var(--clr-text)">V3</strong></div>
+          <div>Adapter: <strong style="color:var(--clr-text)" id="debug-adapter">MockIRSAdapter</strong></div>
+          <div>Shortcut Stop: <code style="background:var(--clr-surface2);padding:2px 6px;border-radius:4px">Ctrl+Shift+X</code></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧪 Halaman Mock IRS</div>
+        <p style="font-size:12px;color:var(--clr-text-muted);margin-bottom:12px">
+          Buka halaman simulasi IRS untuk testing extension sebelum digunakan di UNDIP.
+        </p>
+        <button class="btn btn-ghost" id="btn-open-mock">Buka mock-irs/index.html</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🗑️ Reset</div>
+        <p style="font-size:12px;color:var(--clr-text-muted);margin-bottom:12px">
+          Hapus semua konfigurasi dan kembalikan ke default.
+        </p>
+        <button class="btn btn-danger" id="btn-reset">Reset Semua Data</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Save bar -->
+<div class="save-bar">
+  <span class="save-indicator" id="save-indicator">✓ Tersimpan</span>
+  <button class="btn btn-primary" id="btn-save">💾 Simpan</button>
+</div>
+
+<script type="module" src="options.ts"></script>
+</body>
+</html>

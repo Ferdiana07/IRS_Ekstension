@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRS WAR ASSISTANT</title>
+  <script type="module" crossorigin src="/popup.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/popup.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">🎓</div>
+    <div class="header-text">
+      <div class="header-title">IRS WAR ASSISTANT</div>
+      <div class="header-subtitle">UNDIP — Automated Course Selection</div>
+    </div>
+    <button class="header-options-btn" id="btn-options" title="Settings">⚙</button>
+  </header>
+
+  <!-- Status Card -->
+  <section class="status-card">
+    <div class="status-row">
+      <div class="status-badge">
+        <div class="status-dot idle" id="status-dot"></div>
+        <span id="status-label">IDLE</span>
+      </div>
+      <div style="font-size:10px;color:var(--clr-text-muted)" id="status-time"></div>
+    </div>
+
+    <div class="status-counters">
+      <div class="counter-item">
+        <div class="counter-value" id="count-target">0</div>
+        <div class="counter-label">Target</div>
+      </div>
+      <div class="counter-item success">
+        <div class="counter-value" id="count-success">0</div>
+        <div class="counter-label">OK</div>
+      </div>
+      <div class="counter-item failed">
+        <div class="counter-value" id="count-failed">0</div>
+        <div class="counter-label">FAIL</div>
+      </div>
+      <div class="counter-item skipped">
+        <div class="counter-value" id="count-skipped">0</div>
+        <div class="counter-label">SKIP</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Current Activity -->
+  <div class="current-card">
+    <div class="current-label">Current</div>
+    <div class="current-course" id="current-course">
+      <span class="current-empty">Menunggu...</span>
+    </div>
+    <div class="current-class" id="current-class"></div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="btn-group">
+    <button class="btn btn-start" id="btn-start">
+      🚀 START WAR
+    </button>
+    <button class="btn btn-stop" id="btn-stop" disabled>
+      🛑 STOP
+    </button>
+  </div>
+
+  <!-- War Complete Banner -->
+  <div class="war-complete" id="war-complete">
+    <div class="war-complete-title">🎉 WAR SELESAI!</div>
+    <div class="war-complete-stats" id="war-complete-stats"></div>
+  </div>
+
+  <!-- Log Panel -->
+  <div class="log-section">
+    <div class="log-header">
+      <span class="log-title">📋 Log</span>
+      <button class="log-clear" id="btn-clear-log">Clear</button>
+    </div>
+    <div class="log-panel" id="log-panel">
+      <div class="log-entry INFO">
+        <span class="log-time">--:--:--</span>
+        <span class="log-level">INFO</span>
+        <span class="log-text">Extension ready. Configure targets in Settings, then press START WAR.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-mode">Mode: <span id="footer-mode">Assisted</span></div>
+    <div class="footer-shortcut">Ctrl+Shift+X = STOP</div>
+  </footer>
+
+</body>
+</html>
