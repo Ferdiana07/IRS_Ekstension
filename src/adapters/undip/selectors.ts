@@ -1,94 +1,150 @@
 // ============================================================
 // Adapters: UNDIP IRS Selectors
 //
-// Derived from: siap.undip.ac.id/irs/mhs/irs
-// DOM inspection: screenshots + HTML provided by user (2026-08-08)
+// Source: siap.undip.ac.id/irs/mhs/irs
+// DOM verified: 2026-08-08 (actual outerHTML provided by user)
 //
-// ── CONFIRMED selectors (verified from screenshots/HTML) ──────────────────
-// - Modal: Bootstrap modal .modal.show with title "Konfirmasi IRS"
-// - Confirm button: button with text "Ya"
-// - Cancel button:  button with text "Tidak"
-// - Left sidebar:   .col-matakuliah-left or similar
-// - Course cell:    calendar block with course name + class info
+// ── Calendar block structure ───────────────────────────────
+// Each calendar <td> contains zero or more <div class="makul_XXXX ...">
+// blocks. XXXX = numeric course ID.
 //
-// ── NEEDS VERIFICATION ────────────────────────────────────────────────────
-// - Exact CSS class of the course calendar cell element
-// - Exact CSS class of the class/quota display inside each cell
-// - The select/click mechanism (click on cell? or button inside cell?)
+// Three states:
+//
+// 1. AVAILABLE (can select):
+//    <div class="makul_XXXX bs-callout-success callout-bordered btn_unirs"
+//         data-id-mk-smt="519944"   ← non-empty IRS session ID
+//         style="cursor:pointer">
+//      <strong>Course Name</strong>
+//      <b class="orange">A 3/3 sks</b>
+//    </div>
+//    → has .btn_unirs, cursor:pointer, NO .ft-check-circle
+//
+// 2. SELECTED (already picked):
+//    Same as above BUT contains:
+//      <i class="ft-check-circle"></i>
+//    → has .btn_unirs + .ft-check-circle
+//
+// 3. NOT AVAILABLE (full / restricted):
+//    <div class="makul_XXXX bs-callout-grey ... grey"
+//         style="cursor:not-allowed">
+//      <strong>Course Name</strong>
+//      <b class="orange">A 3/3 sks</b>
+//    </div>
+//    → has .bs-callout-grey + cursor:not-allowed, NO .btn_unirs
+//
+// ── Quota note ─────────────────────────────────────────────
+// "A 3/3 sks" = class A + 3 SKS (NOT quota count!)
+// Real quota is inside data-content (HTML-encoded popover table):
+//   Kuota kelas: 45, Kuota terisi: 42
 // ============================================================
 
 export const UNDIP_SELECTORS = {
-  // ── Course table / calendar view ──────────────────────────────────────────
-  // The IRS page shows courses in a weekly calendar grid.
-  // Each course block is a clickable td or div inside the grid.
-  // TODO: Verify exact selector by right-clicking a course cell → Inspect
-  COURSE_ROW: 'td.fc-event, div.fc-event, [data-mkkrs]',
+  // ── Course blocks in calendar ─────────────────────────────
+  /** Any course block div (any state) */
+  COURSE_BLOCK: 'div[class*="makul_"]',
 
-  // ── Left sidebar course list ───────────────────────────────────────────────
-  // Left panel with "Matakuliah Ditampilkan" list
-  SIDEBAR_COURSE_ITEM: '.col-matakuliah-left .item-mkkrs, .daftar-mkkrs .item',
+  /** Clickable/selectable course block (available OR already selected) */
+  CLICKABLE_BLOCK: 'div.btn_unirs',
 
-  /** Element containing the course name within a sidebar item */
-  COURSE_NAME_SIDEBAR: '.nama-mk, .course-name, strong',
+  /** Available to select: btn_unirs + no checkmark */
+  AVAILABLE_BLOCK: 'div.btn_unirs:not(:has(.ft-check-circle))',
 
-  /** Element containing the class label (A, B, C, ...) */
-  COURSE_CLASS_SIDEBAR: '.kelas-mk, .kelas',
+  /** Already selected: has checkmark icon inside */
+  SELECTED_INDICATOR: '.ft-check-circle',
 
-  /** Quota text element, e.g. "3/3 sks" or "29/30" */
-  COURSE_QUOTA: '.kuota, .sks-info',
+  /** Not available: grey + cursor not-allowed */
+  NOT_AVAILABLE_BLOCK: 'div.bs-callout-grey',
 
-  /** Element showing availability status */
-  COURSE_STATUS: '.status-mk',
+  // ── Data within each block ────────────────────────────────
+  /** Course name element */
+  COURSE_NAME_EL: 'strong',
 
-  // ── Selection ─────────────────────────────────────────────────────────────
-  // On UNDIP IRS, clicking the course cell itself triggers selection.
-  // The calendar cells are clickable.
-  // TODO: Verify — may be a button inside the cell
-  SELECT_BUTTON: 'td.fc-event, div.fc-event, .btn-pilih-mk',
-
-  /** Indicator that a course has already been selected (green checkmark in sidebar) */
-  // From screenshot: courses with checkmark icon are already selected
-  SELECTED_INDICATOR: '.icon-check, .fa-check-circle, .terpilih, [data-selected="true"]',
-
-  // ── Confirmation Modal (CONFIRMED from screenshot) ─────────────────────────
   /**
-   * CONFIRMED: The modal is a Bootstrap modal.
-   * Title: "Konfirmasi IRS"
-   * Body:  "Apakah anda yakin ingin memilih mata kuliah ini?"
-   * Confirm: button text "Ya" (blue)
-   * Cancel:  button text "Tidak" (red)
+   * Class + SKS element.
+   * Text: "A 3/3 sks" → class = first token before space = "A"
    */
+  COURSE_CLASS_EL: 'b.orange',
+
+  /**
+   * data-original-title attribute = full course name
+   * e.g. " Pembelajaran Mesin (GABUNGAN)"
+   */
+  COURSE_NAME_ATTR: 'data-original-title',
+
+  /**
+   * data-id-mk-smt = IRS session ID for this specific class slot.
+   * Non-empty only when course is selectable.
+   * Used as domKey to uniquely identify each block.
+   */
+  COURSE_ID_ATTR: 'data-id-mk-smt',
+
+  /**
+   * data-content = HTML-encoded popover table with full details:
+   * Kuota kelas, Kuota terisi, Kelas, Kode MK, etc.
+   */
+  COURSE_POPOVER_ATTR: 'data-content',
+
+  // ── Confirmation Modal (CONFIRMED from screenshots) ────────
   MODAL: '.modal.show, .modal[style*="display: block"], .modal[style*="display:block"]',
   MODAL_TITLE: '.modal-title, .modal-header h4, .modal-header h5',
   MODAL_BODY: '.modal-body',
-  // Confirm = "Ya", Cancel = "Tidak"
-  MODAL_CONFIRM: '.modal.show .btn-primary, .modal.show .btn-success, .modal.show button.ya',
-  MODAL_CANCEL: '.modal.show .btn-danger, .modal.show .btn-secondary, .modal.show button.tidak',
+  // Buttons found by text: "Ya" (confirm) / "Tidak" (cancel)
+  MODAL_CONFIRM_TEXT: 'ya',
+  MODAL_CANCEL_TEXT: 'tidak',
 
-  // ── Final Submission ──────────────────────────────────────────────────────
-  /** Final "Simpan IRS" / "Submit IRS" button - needs verification */
-  FINAL_SUBMIT: '.btn-simpan-irs, button[data-action="simpan-irs"], #btn-simpan-irs',
+  // ── Final Submission ──────────────────────────────────────
+  FINAL_SUBMIT: '.btn-simpan-irs, #btn-simpan-irs, button[data-action="simpan"]',
 } as const;
 
-// ── Known text patterns (CONFIRMED from screenshots) ───────────────────────
-export const UNDIP_CONFIRMATION_TEXTS = {
-  // Modal title text (confirmed)
-  MODAL_TITLE: 'Konfirmasi IRS',
-  // Modal body text (confirmed)
-  MODAL_BODY_KEYWORD: 'ingin memilih mata kuliah',
-  // Confirm button text (confirmed)
-  CONFIRM_BUTTON_TEXT: 'ya',
-  // Cancel button text (confirmed)
-  CANCEL_BUTTON_TEXT: 'tidak',
-  // Selected state indicators
-  SELECTED_TEXT: ['terpilih', 'selected', 'dipilih', 'sudah dipilih'],
-  AVAILABLE_TEXT: ['tersedia', 'available'],
-  FULL_TEXT: ['penuh', 'full', 'closed'],
+// ── Popover quota parser ────────────────────────────────────────────────────
+/**
+ * Parse Kuota kelas + Kuota terisi from the HTML-encoded data-content attribute.
+ * Returns { capacity, current } or null if unparseable.
+ */
+export function parseUndipQuotaFromPopover(dataContent: string): {
+  capacity: number;
+  current: number;
+  status: 'AVAILABLE' | 'FULL' | 'NOT_AVAILABLE';
+} | null {
+  if (!dataContent) return null;
+
+  try {
+    // data-content is HTML-encoded — decode it first
+    const decoded = dataContent
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+    // Extract status header: (DIPILIH), (PENUH - FULL QUOTA), (TIDAK TERSEDIA)
+    const statusMatch = decoded.match(/\((DIPILIH|PENUH|TIDAK TERSEDIA)[^)]*\)/i);
+    const rawStatus = statusMatch?.[1]?.toUpperCase() ?? '';
+
+    // Extract quota numbers
+    const kapasitasMatch = decoded.match(/Kuota kelas[\s\S]*?<td[^>]*>(\d+)<\/td>/i);
+    const terisiMatch = decoded.match(/Kuota terisi[\s\S]*?<td[^>]*>(\d+)<\/td>/i);
+
+    const capacity = kapasitasMatch ? parseInt(kapasitasMatch[1]) : NaN;
+    const current  = terisiMatch ? parseInt(terisiMatch[1]) : NaN;
+
+    if (isNaN(capacity) || isNaN(current)) return null;
+
+    let status: 'AVAILABLE' | 'FULL' | 'NOT_AVAILABLE' = 'AVAILABLE';
+    if (rawStatus === 'PENUH') status = 'FULL';
+    else if (rawStatus === 'TIDAK TERSEDIA') status = 'NOT_AVAILABLE';
+    else if (current >= capacity) status = 'FULL';
+
+    return { capacity, current, status };
+  } catch {
+    return null;
+  }
+}
+
+// ── Text patterns ───────────────────────────────────────────────────────────
+export const UNDIP_MODAL_TEXTS = {
+  TITLE: 'Konfirmasi IRS',
+  BODY_KEYWORD: 'ingin memilih mata kuliah',
+  CONFIRM: 'ya',
+  CANCEL: 'tidak',
 };
-
-// ── UNDIP IRS page URL patterns ────────────────────────────────────────────
-export const UNDIP_IRS_URLS = [
-  'siap.undip.ac.id/irs/mhs/irs',
-  'siap.undip.ac.id/irs',
-];
-

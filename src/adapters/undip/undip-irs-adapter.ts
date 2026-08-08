@@ -2,151 +2,81 @@
 // Adapters: UNDIP IRS Adapter
 //
 // Target: siap.undip.ac.id/irs/mhs/irs
-// DOM inspection: 2026-08-08 (screenshots + HTML)
+// DOM verified: 2026-08-08 (actual outerHTML confirmed by user)
 //
-// CONFIRMED from screenshots:
-//   - Modal: Bootstrap .modal.show, title "Konfirmasi IRS"
-//   - Confirm button: "Ya" (blue), Cancel: "Tidak" (red)
-//   - Left sidebar: "Matakuliah Ditampilkan" course list
-//   - Calendar view: course cells with class + SKS info
-//   - Selected courses: shown with green checkmark in sidebar
-//
-// NEEDS VERIFICATION (right-click → Inspect on UNDIP IRS page):
-//   - Exact selectors for course calendar cells
-//   - How to extract course name + class from cells
-//   - Click target (cell itself or inner button)
+// ── Selection flow ────────────────────────────────────────
+// 1. detectCourses()  → scan all div[class*="makul_"] in calendar
+// 2. detectAvailability() → check CSS class + cursor style
+// 3. selectCourse()   → click div.btn_unirs (the clickable block)
+// 4. detectConfirmationModal() → wait for .modal.show
+// 5. confirm()        → click "Ya" button
+// 6. verifySelection() → check ft-check-circle appears on block
 // ============================================================
 
 import type { IRSAdapter } from '../adapter';
 import type { DetectedCourse } from '../../types/course';
 import type { Availability } from '../../types/availability';
 import type { ConfirmationModal } from '../../types/confirmation';
-import { UNDIP_SELECTORS, UNDIP_CONFIRMATION_TEXTS } from './selectors';
-import { normalizeText, parseQuota, courseNameSimilarity, classMatches } from '../../utils/normalize';
+import {
+  UNDIP_SELECTORS,
+  UNDIP_MODAL_TEXTS,
+  parseUndipQuotaFromPopover,
+} from './selectors';
+import { normalizeText, courseNameSimilarity } from '../../utils/normalize';
 import { waitForCondition } from '../../utils/sleep';
 import Logger from '../../utils/logger';
 
-// ── Course extraction helpers ──────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Extract all text content from an element, stripping HTML.
- */
 function getText(el: Element | null): string {
   return el?.textContent?.trim() ?? '';
 }
 
 /**
- * Try multiple selectors and return the first matching element.
+ * Strip "(GABUNGAN)", "(REGULER)" etc from course name to get clean name.
  */
-function queryFirst(root: ParentNode, ...selectors: string[]): HTMLElement | null {
-  for (const sel of selectors) {
-    try {
-      const el = root.querySelector<HTMLElement>(sel);
-      if (el) return el;
-    } catch { /* invalid selector — skip */ }
-  }
-  return null;
+function cleanCourseName(raw: string): string {
+  return raw
+    .replace(/\s*\(GABUNGAN\)/gi, '')
+    .replace(/\s*\(REGULER\)/gi, '')
+    .trim();
 }
 
 /**
- * Extract class label from text like "Kelas: A 3/3 sks" or "Kelas A" or just "A".
+ * Extract class letter from text like "A 3/3 sks" → "A"
+ * Or "B 3/3 sks" → "B"
  */
-function extractClassLabel(text: string): string {
-  const normalized = normalizeText(text);
-  // Match patterns: "kelas: a", "kelas a", standalone single letter
-  const m = normalized.match(/kelas[:\s]+([a-z])/i)
-    ?? normalized.match(/\bkelas\s([a-z])\b/i)
-    ?? normalized.match(/^([a-z])$/i)
-    ?? normalized.match(/\s([a-z])\s+\d+\/\d+/i);
+function extractClassLetter(text: string): string {
+  const m = text.trim().match(/^([A-Z])\s/i) ?? text.trim().match(/^([A-Z])$/i);
   return m ? m[1].toUpperCase() : '';
 }
 
 /**
- * Extract quota from text like "3/3 sks", "29/30", "0/30".
+ * Find a button inside a container by its text content.
  */
-function extractQuota(text: string): { current: number; capacity: number } | null {
-  return parseQuota(text);
+function findButtonByText(container: HTMLElement, text: string): HTMLElement | null {
+  const buttons = container.querySelectorAll<HTMLElement>('button, a.btn, input[type="button"]');
+  const target = normalizeText(text);
+  for (const btn of buttons) {
+    if (normalizeText(btn.textContent ?? '') === target) return btn;
+  }
+  return null;
 }
 
-// ── Modal helpers (CONFIRMED approach) ────────────────────────────────────
-
 /**
- * Find a visible Bootstrap modal.
- * Tries multiple detection strategies in priority order.
+ * Find the visible Bootstrap modal.
  */
 function findVisibleModal(): HTMLElement | null {
-  // Strategy 1: .modal.show (Bootstrap 4/5 standard)
+  // .modal.show — Bootstrap 4/5 standard
   const byShow = document.querySelector<HTMLElement>('.modal.show');
   if (byShow) return byShow;
 
-  // Strategy 2: display:block inline style
-  const allModals = document.querySelectorAll<HTMLElement>('.modal');
-  for (const modal of allModals) {
-    const style = window.getComputedStyle(modal);
-    if (style.display !== 'none' && style.visibility !== 'hidden') {
-      return modal;
-    }
-  }
-
-  // Strategy 3: role="dialog" that is visible
-  const byRole = document.querySelector<HTMLElement>('[role="dialog"]:not([aria-hidden="true"])');
-  if (byRole) return byRole;
-
-  return null;
-}
-
-/**
- * Find the confirm button (text "Ya") inside the modal.
- * UNDIP IRS modal has blue "Ya" and red "Tidak" buttons (CONFIRMED).
- */
-function findConfirmButton(modal: HTMLElement): HTMLElement | null {
-  // Try CSS selectors first
-  for (const sel of [UNDIP_SELECTORS.MODAL_CONFIRM]) {
-    try {
-      const el = modal.querySelector<HTMLElement>(sel);
-      if (el) return el;
-    } catch { /* skip invalid */ }
-  }
-
-  // Fallback: find by text "ya" (case-insensitive)
-  const buttons = modal.querySelectorAll<HTMLElement>('button, a.btn, input[type="button"], input[type="submit"]');
-  for (const btn of buttons) {
-    if (normalizeText(btn.textContent ?? '') === UNDIP_CONFIRMATION_TEXTS.CONFIRM_BUTTON_TEXT) {
-      return btn;
-    }
+  // Fallback: any .modal with display != none
+  for (const m of document.querySelectorAll<HTMLElement>('.modal')) {
+    if (window.getComputedStyle(m).display !== 'none') return m;
   }
 
   return null;
-}
-
-/**
- * Find the cancel button (text "Tidak") inside the modal.
- */
-function findCancelButton(modal: HTMLElement): HTMLElement | null {
-  const buttons = modal.querySelectorAll<HTMLElement>('button, a.btn');
-  for (const btn of buttons) {
-    if (normalizeText(btn.textContent ?? '') === UNDIP_CONFIRMATION_TEXTS.CANCEL_BUTTON_TEXT) {
-      return btn;
-    }
-  }
-  return null;
-}
-
-/**
- * Validate that the visible modal is an IRS course confirmation modal.
- * CONFIRMED: title = "Konfirmasi IRS", body contains "ingin memilih mata kuliah"
- */
-function isIRSConfirmationModal(modal: HTMLElement): boolean {
-  const title = normalizeText(getText(modal.querySelector('.modal-title, .modal-header h4, .modal-header h5')));
-  const body  = normalizeText(getText(modal.querySelector('.modal-body')));
-
-  const titleMatch = title.includes(normalizeText(UNDIP_CONFIRMATION_TEXTS.MODAL_TITLE));
-  const bodyMatch  = body.includes(normalizeText(UNDIP_CONFIRMATION_TEXTS.MODAL_BODY_KEYWORD));
-
-  Logger.debug(`UndipAdapter: Modal title="${title}" body="${body.slice(0, 60)}"`);
-  Logger.debug(`UndipAdapter: titleMatch=${titleMatch} bodyMatch=${bodyMatch}`);
-
-  return titleMatch || bodyMatch;
 }
 
 // ── UndipIRSAdapter ────────────────────────────────────────────────────────
@@ -154,289 +84,196 @@ function isIRSConfirmationModal(modal: HTMLElement): boolean {
 export class UndipIRSAdapter implements IRSAdapter {
   readonly name = 'UndipIRSAdapter';
 
-  // ── Course detection ─────────────────────────────────────────────────────
+  // ── Course Detection ──────────────────────────────────────────────────────
 
   detectCourses(): DetectedCourse[] {
     const courses: DetectedCourse[] = [];
 
-    // Strategy A: Detect from left sidebar list (most reliable)
-    // Sidebar shows "Matakuliah Ditampilkan" with each course item
-    courses.push(...this.detectFromSidebar());
+    // All course blocks on the page (any state)
+    const blocks = document.querySelectorAll<HTMLElement>(UNDIP_SELECTORS.COURSE_BLOCK);
 
-    // Strategy B: Detect from calendar cells (if sidebar detection fails)
-    if (courses.length === 0) {
-      courses.push(...this.detectFromCalendar());
-    }
+    Logger.debug(`UndipAdapter: Found ${blocks.length} makul blocks on page`);
 
-    Logger.debug(`UndipAdapter: Detected ${courses.length} course entries`);
-    return courses;
-  }
+    blocks.forEach((block) => {
+      // ── Extract course name ──────────────────────────────────────────────
+      // Primary: data-original-title (e.g. " Pembelajaran Mesin (GABUNGAN)")
+      const titleAttr = block.getAttribute(UNDIP_SELECTORS.COURSE_NAME_ATTR) ?? '';
+      const nameFromAttr = cleanCourseName(titleAttr);
 
-  /**
-   * Strategy A: Parse courses from the left sidebar list.
-   * Each sidebar item shows: eye icon | course name | label (WAJIB/PILIHAN) + class info
-   */
-  private detectFromSidebar(): DetectedCourse[] {
-    const courses: DetectedCourse[] = [];
+      // Fallback: <strong> element text
+      const nameFromEl = cleanCourseName(getText(block.querySelector(UNDIP_SELECTORS.COURSE_NAME_EL)));
 
-    // Try multiple possible sidebar selectors
-    const sidebarItems = document.querySelectorAll<HTMLElement>(
-      '.col-md-3 .list-group-item, ' +
-      '.sidebar-kiri .item, ' +
-      '[class*="matakuliah"] .item, ' +
-      '.krs-sidebar li, ' +
-      '.panel-mkkrs .list-group-item'
-    );
-
-    sidebarItems.forEach((item, i) => {
-      const fullText = getText(item);
-      if (!fullText || fullText.length < 5) return;
-
-      // Extract course name: first bold/strong element or first line of text
-      const nameEl = item.querySelector<HTMLElement>('strong, b, .nama-mk, .course-name');
-      const name = nameEl ? getText(nameEl) : fullText.split('\n')[0].trim();
-
+      const name = nameFromAttr || nameFromEl;
       if (!name || name.length < 3) return;
 
-      // Extract class from text like "(K2024) (SMT 5) (3 SKS)" or "Kelas: A"
-      // From screenshot: items show labels like "WAJIB (K2024) (SMT 5) (3 SKS)"
-      // Class info might come from clicking or hovering — we try to extract from text
-      const classLabel = extractClassLabel(fullText);
+      // ── Extract class letter ─────────────────────────────────────────────
+      // <b class="orange">A 3/3 sks</b> → "A"
+      const classEl = block.querySelector<HTMLElement>(UNDIP_SELECTORS.COURSE_CLASS_EL);
+      const classText = getText(classEl);
+      const className = extractClassLetter(classText);
+      if (!className) return;
 
-      // Without explicit class — add an item for each possible class in the text
-      // The sidebar seems to show one entry per course (not per class)
-      // Multiple classes (A, B, C...) appear in the calendar view
+      // ── Build unique key ─────────────────────────────────────────────────
+      // data-id-mk-smt is the IRS session ID (non-empty for selectable courses)
+      const mkSmt = block.getAttribute(UNDIP_SELECTORS.COURSE_ID_ATTR) ?? '';
+      // makul_XXXXX class gives us the course ID
+      const makul = [...block.classList].find((c) => c.startsWith('makul_')) ?? '';
+      const domKey = mkSmt
+        ? `undip-${mkSmt}`
+        : `undip-${makul}-${className}`;
 
-      const domKey = `undip-sidebar-${i}`;
+      // ── Extract quota from popover (optional) ────────────────────────────
+      const popoverData = block.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
+      const quota = parseUndipQuotaFromPopover(popoverData);
+
+      const quotaText = quota
+        ? `${quota.current}/${quota.capacity}`
+        : undefined;
 
       courses.push({
         domKey,
-        element: item,
+        element: block,
         name,
-        className: classLabel || 'A', // Default to A if not extractable
-        quotaText: undefined,
-      });
-    });
-
-    return courses;
-  }
-
-  /**
-   * Strategy B: Parse courses from the calendar/schedule grid.
-   * Calendar cells contain: course name, class label, quota like "3/3 sks"
-   * From screenshot: cells show "Komputasi Tersebar dan Pararel (GABUNGAN)
-   *   WAJIB (K2024) (SMT 5) (3 SKS)  Kelas: A 3/3 sks  07:00:00 - 09:30:00"
-   */
-  private detectFromCalendar(): DetectedCourse[] {
-    const courses: DetectedCourse[] = [];
-
-    // Calendar cells: try FC (FullCalendar) and table-based layouts
-    const cells = document.querySelectorAll<HTMLElement>(
-      'td[data-mkkrs], div[data-mkkrs], ' +
-      '.fc-event, .fc-event-container, ' +
-      '.jadwal-cell, .krs-cell, ' +
-      'td.slot-mk, div.slot-mk'
-    );
-
-    cells.forEach((cell, i) => {
-      const fullText = getText(cell);
-      if (!fullText || fullText.length < 5) return;
-
-      // Extract course name: usually first line or largest text
-      const lines = fullText.split('\n').map((l) => l.trim()).filter(Boolean);
-      const name = lines[0] ?? '';
-      if (!name || name.length < 3) return;
-
-      // Extract class from cell text
-      const classLabel = extractClassLabel(fullText);
-      if (!classLabel) return;
-
-      // Extract quota
-      const quotaText = fullText.match(/(\d+\/\d+)\s*sks/i)?.[1];
-
-      const domKey = cell.dataset['mkkrs'] ?? `undip-cell-${i}-${classLabel}`;
-
-      courses.push({
-        domKey,
-        element: cell,
-        name,
-        className: classLabel,
+        className,
         quotaText,
       });
     });
 
+    Logger.debug(`UndipAdapter: Parsed ${courses.length} valid course entries`);
     return courses;
   }
 
-  // ── Availability ─────────────────────────────────────────────────────────
+  // ── Availability Detection ────────────────────────────────────────────────
 
   detectAvailability(course: DetectedCourse): Availability {
-    const el = course.element;
-    const fullText = getText(el);
+    const el = course.element as HTMLElement;
+    const rawText = el.textContent ?? '';
 
-    // From screenshot: "Kelas: A 3/3 sks" — 3/3 means full (3 out of 3 SKS slots taken)
-    // BUT on UNDIP IRS, the x/y might represent SKS not quota count
-    // Wait — looking more carefully: "Kelas: D 4/4 sks" in green, others struck through
-    // Green text = available, struck-through/dimmed = full
-
-    // Check for already-selected (green checkmark)
-    if (this.isAlreadySelected(course)) {
-      return { status: 'SELECTED', available: false, rawText: fullText };
+    // ── SELECTED: has ft-check-circle icon ────────────────────────────────
+    if (el.querySelector(UNDIP_SELECTORS.SELECTED_INDICATOR)) {
+      Logger.debug(`UndipAdapter: "${course.name}" Kelas ${course.className} → SELECTED`);
+      return { status: 'SELECTED', available: false, rawText };
     }
 
-    // Check visual indicators: green = available, red/strikethrough = full
-    const style = window.getComputedStyle(el);
-    const isStrikethrough = style.textDecoration.includes('line-through');
-    if (isStrikethrough) {
-      return { status: 'FULL', available: false, rawText: fullText };
+    // ── NOT AVAILABLE: grey + cursor:not-allowed ──────────────────────────
+    const style = el.getAttribute('style') ?? '';
+    const isNotAllowed = style.includes('cursor: not-allowed') || style.includes('cursor:not-allowed');
+    const isGrey = el.classList.contains('bs-callout-grey') || el.classList.contains('grey');
+
+    if (isNotAllowed || (isGrey && !el.classList.contains('btn_unirs'))) {
+      // Parse popover for more detail (PENUH vs TIDAK TERSEDIA)
+      const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
+      const quota = parseUndipQuotaFromPopover(popoverData);
+
+      const status = quota?.status === 'NOT_AVAILABLE' ? 'NOT_AVAILABLE' : 'FULL';
+      Logger.debug(`UndipAdapter: "${course.name}" Kelas ${course.className} → ${status}`);
+      return {
+        status,
+        available: false,
+        current: quota?.current,
+        capacity: quota?.capacity,
+        rawText,
+      };
     }
 
-    // Check data attributes
-    const dataStatus = (el.dataset['status'] ?? el.dataset['available'] ?? '').toLowerCase();
-    if (dataStatus === 'full' || dataStatus === '0') {
-      return { status: 'FULL', available: false, rawText: fullText };
-    }
-    if (dataStatus === 'available' || dataStatus === '1') {
-      return { status: 'AVAILABLE', available: true, rawText: fullText };
-    }
+    // ── AVAILABLE: has btn_unirs + cursor:pointer + no checkmark ─────────
+    if (el.classList.contains('btn_unirs')) {
+      const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
+      const quota = parseUndipQuotaFromPopover(popoverData);
 
-    // Parse quota: on UNDIP "3/3 sks" — if current === capacity it's the SKS count, not a full indicator
-    // The actual quota needs inspection — for now, check color-based availability
-    // Green colored cells/text = available based on screenshots
-    const color = style.color;
-    // Green-ish colors (rgb values)
-    const isGreen = color.includes('rgb(') && (() => {
-      const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (!m) return false;
-      const [, r, g, b] = m.map(Number);
-      return (g ?? 0) > (r ?? 255) && (g ?? 0) > (b ?? 0); // green dominant
-    })();
-
-    if (isGreen) {
-      const quota = parseQuota(fullText);
+      Logger.debug(
+        `UndipAdapter: "${course.name}" Kelas ${course.className} → AVAILABLE` +
+        (quota ? ` (${quota.current}/${quota.capacity})` : '')
+      );
       return {
         status: 'AVAILABLE',
         available: true,
         current: quota?.current,
         capacity: quota?.capacity,
-        rawText: fullText,
+        rawText,
       };
     }
 
-    // Default: check the quota pattern
-    const quota = parseQuota(fullText);
-    if (quota) {
-      // On UNDIP IRS, if the element is not struck through and clickable, assume available
-      // This needs verification with actual quota data
-      const canClick = el.style.pointerEvents !== 'none' && !el.hasAttribute('disabled');
-      if (canClick) {
-        return {
-          status: 'AVAILABLE',
-          available: true,
-          current: quota.current,
-          capacity: quota.capacity,
-          rawText: fullText,
-        };
-      }
-      return {
-        status: quota.current >= quota.capacity ? 'FULL' : 'AVAILABLE',
-        available: quota.current < quota.capacity,
-        current: quota.current,
-        capacity: quota.capacity,
-        rawText: fullText,
-      };
-    }
-
-    // Cannot determine
-    Logger.debug(`UndipAdapter: Availability UNKNOWN for "${course.name}" Kelas ${course.className}`);
-    return { status: 'UNKNOWN', available: false, rawText: fullText };
+    Logger.debug(`UndipAdapter: "${course.name}" Kelas ${course.className} → UNKNOWN`);
+    return { status: 'UNKNOWN', available: false, rawText };
   }
 
-  // ── Selected state ────────────────────────────────────────────────────────
+  // ── Selected Check ────────────────────────────────────────────────────────
 
   isAlreadySelected(course: DetectedCourse): boolean {
-    const el = course.element;
-
-    // From screenshot: selected courses have a green checkmark icon in sidebar
-    const hasCheck = !!el.querySelector('.fa-check, .fa-check-circle, .icon-check, svg[data-icon="check"]');
-    if (hasCheck) return true;
-
-    // Check data attributes
-    if (el.dataset['selected'] === 'true' || el.dataset['terpilih'] === '1') return true;
-
-    // Check class names
-    if (el.classList.contains('terpilih') || el.classList.contains('selected') || el.classList.contains('dipilih')) return true;
-
-    // Check for struck-through text with selected class
-    // From screenshot: green rows in calendar = selected
-    // Actually from screenshot: there's a checkmark (✓) overlay on selected courses
-    const parentRow = el.closest('tr, li, div[class*="item"]');
-    if (parentRow?.querySelector('.fa-check, .fa-check-circle')) return true;
-
-    return false;
+    const el = course.element as HTMLElement;
+    // Green checkmark = dipilih
+    return !!el.querySelector(UNDIP_SELECTORS.SELECTED_INDICATOR);
   }
 
   // ── Selection ─────────────────────────────────────────────────────────────
 
   async selectCourse(course: DetectedCourse): Promise<boolean> {
-    const el = course.element;
+    const el = course.element as HTMLElement;
 
-    // Check if there's an explicit button inside the element
-    const btn = queryFirst(el,
-      'button.btn-pilih',
-      'a.btn-pilih',
-      'button[onclick]',
-      'a[onclick]',
-      '.btn-primary',
-      '.pilih-mk'
-    );
-
-    const target = btn ?? el;
-
-    if (!target) {
-      Logger.warn(`UndipAdapter: No clickable target for ${course.name} Kelas ${course.className}`);
+    // Safety: must have btn_unirs class (clickable)
+    if (!el.classList.contains('btn_unirs')) {
+      Logger.warn(
+        `UndipAdapter: "${course.name}" Kelas ${course.className} is NOT btn_unirs — refusing to click`
+      );
       return false;
     }
 
-    Logger.debug(`UndipAdapter: Clicking ${target.tagName} for "${course.name}" Kelas ${course.className}`);
-    target.click();
+    // Safety: must not have cursor:not-allowed
+    const style = el.getAttribute('style') ?? '';
+    if (style.includes('not-allowed')) {
+      Logger.warn(
+        `UndipAdapter: "${course.name}" Kelas ${course.className} has cursor:not-allowed — refusing to click`
+      );
+      return false;
+    }
+
+    // Safety: must not already be selected
+    if (this.isAlreadySelected(course)) {
+      Logger.warn(`UndipAdapter: "${course.name}" Kelas ${course.className} is already selected — skip`);
+      return false;
+    }
+
+    Logger.debug(`UndipAdapter: Clicking block for "${course.name}" Kelas ${course.className}`);
+    el.click();
     return true;
   }
 
-  // ── Confirmation Modal (FULLY IMPLEMENTED — confirmed from screenshot) ───
+  // ── Confirmation Modal ────────────────────────────────────────────────────
 
   detectConfirmationModal(): ConfirmationModal | null {
     const modal = findVisibleModal();
     if (!modal) return null;
 
-    // Verify it's the IRS confirmation modal (not some other modal)
-    if (!isIRSConfirmationModal(modal)) {
-      Logger.debug('UndipAdapter: Visible modal is not an IRS confirmation modal');
+    // Verify it's the IRS confirmation modal
+    const titleText = normalizeText(getText(modal.querySelector(UNDIP_SELECTORS.MODAL_TITLE)));
+    const bodyText  = normalizeText(getText(modal.querySelector(UNDIP_SELECTORS.MODAL_BODY)));
+
+    const isTitleMatch = titleText.includes(normalizeText(UNDIP_MODAL_TEXTS.TITLE));
+    const isBodyMatch  = bodyText.includes(normalizeText(UNDIP_MODAL_TEXTS.BODY_KEYWORD));
+
+    if (!isTitleMatch && !isBodyMatch) {
+      Logger.debug(`UndipAdapter: Modal visible but not IRS modal (title="${titleText}")`);
       return null;
     }
 
-    const titleEl   = modal.querySelector<HTMLElement>('.modal-title, .modal-header h4, .modal-header h5');
-    const bodyEl    = modal.querySelector<HTMLElement>('.modal-body');
-    const confirmEl = findConfirmButton(modal);
-    const cancelEl  = findCancelButton(modal);
+    // Find Ya / Tidak buttons by text
+    const confirmBtn = findButtonByText(modal, UNDIP_MODAL_TEXTS.CONFIRM);
+    const cancelBtn  = findButtonByText(modal, UNDIP_MODAL_TEXTS.CANCEL);
 
     Logger.debug(
-      `UndipAdapter: Modal detected — title="${getText(titleEl)}" ` +
-      `confirm="${confirmEl ? 'FOUND' : 'NOT FOUND'}" cancel="${cancelEl ? 'FOUND' : 'NOT FOUND'}"`
+      `UndipAdapter: IRS modal confirmed — ` +
+      `confirm=${confirmBtn ? 'FOUND' : 'MISSING'} cancel=${cancelBtn ? 'FOUND' : 'MISSING'}`
     );
 
-    // On UNDIP IRS, the modal body is generic ("Apakah anda yakin ingin memilih mata kuliah ini?")
-    // It does NOT contain the specific course name/class — so we cannot validate by content.
-    // We rely on timing: modal appears only after clicking a specific course.
-    // The core engine's SELECTING → WAITING_CONFIRMATION flow ensures correctness.
     return {
       element: modal,
-      title: getText(titleEl),
-      message: getText(bodyEl),
-      confirmButton: confirmEl ?? undefined,
-      cancelButton: cancelEl ?? undefined,
-      // UNDIP modal body does not contain course name — set to undefined
-      // The engine will use 'UNREADABLE' validation bypass for this case
+      title: getText(modal.querySelector(UNDIP_SELECTORS.MODAL_TITLE)),
+      message: getText(modal.querySelector(UNDIP_SELECTORS.MODAL_BODY)),
+      confirmButton: confirmBtn ?? undefined,
+      cancelButton: cancelBtn ?? undefined,
+      // UNDIP modal body does NOT contain course name/class
+      // Safety relies on timing: modal only appears after clicking a specific block
       detectedCourseName: undefined,
       detectedClassName: undefined,
     };
@@ -444,48 +281,60 @@ export class UndipIRSAdapter implements IRSAdapter {
 
   async confirm(modal: ConfirmationModal): Promise<boolean> {
     if (!modal.confirmButton) {
-      Logger.warn('UndipAdapter: No confirm button found in modal');
+      Logger.warn('UndipAdapter: No "Ya" button found in modal');
       return false;
     }
 
-    Logger.debug(`UndipAdapter: Clicking "Ya" button`);
+    Logger.debug('UndipAdapter: Clicking "Ya" button');
     modal.confirmButton.click();
     return true;
   }
 
-  // ── Verification ─────────────────────────────────────────────────────────
+  // ── Verification ──────────────────────────────────────────────────────────
 
   async verifySelection(course: DetectedCourse): Promise<boolean> {
-    // Wait for either: checkmark appears on course, or course moves to "selected" state
+    // After confirming, the block should gain the ft-check-circle icon
+    // and transform into the "DIPILIH" green card with media layout
     const verified = await waitForCondition(
       () => {
-        // Re-check the element
+        // Check the original element reference
         if (this.isAlreadySelected(course)) return true;
 
-        // Also check if the sidebar now shows this course as selected
-        // (the element reference may have been replaced by DOM update)
-        const allSelected = document.querySelectorAll(
-          '.fa-check-circle, .icon-check, [data-selected="true"], .terpilih'
+        // UNDIP may re-render the DOM — scan for any block matching the course
+        // that now has the checkmark
+        const allSelected = document.querySelectorAll<HTMLElement>(
+          `${UNDIP_SELECTORS.COURSE_BLOCK}:has(${UNDIP_SELECTORS.SELECTED_INDICATOR})`
         );
         for (const sel of allSelected) {
-          const text = normalizeText(getText(sel.closest('li, div, tr') ?? sel));
-          if (courseNameSimilarity(text, course.name) > 0.5) return true;
+          const selName = cleanCourseName(
+            sel.getAttribute(UNDIP_SELECTORS.COURSE_NAME_ATTR) ??
+            getText(sel.querySelector(UNDIP_SELECTORS.COURSE_NAME_EL))
+          );
+          const selClass = extractClassLetter(
+            getText(sel.querySelector(UNDIP_SELECTORS.COURSE_CLASS_EL))
+          );
+          if (
+            courseNameSimilarity(selName, course.name) >= 0.7 &&
+            selClass === course.className
+          ) {
+            Logger.debug(`UndipAdapter: Found newly selected block matching "${course.name}" Kelas ${course.className}`);
+            return true;
+          }
         }
-
         return false;
       },
-      4000,
-      250
+      5000,
+      300
     );
 
-    Logger.debug(`UndipAdapter: Verification ${verified ? 'SUCCESS' : 'FAILED'} for "${course.name}"`);
+    Logger.debug(
+      `UndipAdapter: Verification ${verified ? '✓ PASSED' : '✗ FAILED'} ` +
+      `for "${course.name}" Kelas ${course.className}`
+    );
     return verified;
   }
 
   detectFinalSubmitButton(): HTMLElement | null {
-    return queryFirst(document,
-      UNDIP_SELECTORS.FINAL_SUBMIT,
-      'button:not(.btn-back):not(.btn-cancel)',
-    );
+    return document.querySelector<HTMLElement>(UNDIP_SELECTORS.FINAL_SUBMIT);
   }
 }
