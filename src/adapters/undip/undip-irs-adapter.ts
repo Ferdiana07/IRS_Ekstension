@@ -165,7 +165,7 @@ export class UndipIRSAdapter implements IRSAdapter {
       const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
       const quota = parseUndipQuotaFromPopover(popoverData);
 
-      const status = quota?.status === 'NOT_AVAILABLE' ? 'NOT_AVAILABLE' : 'FULL';
+      const status = quota?.status === 'NOT_AVAILABLE' ? 'CLOSED' : 'FULL';
       Logger.debug(`UndipAdapter: "${course.name}" Kelas ${course.className} → ${status}`);
       return {
         status,
