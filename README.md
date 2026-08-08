@@ -1,7 +1,7 @@
 # 🎓 IRS WAR ASSISTANT
 
 > **Chrome Extension untuk otomasi pemilihan mata kuliah IRS UNDIP**  
-> Cepat, aman, tervalidasi — bukan brute force.
+> Cepat, aman, tervalidasi (BETA).
 
 ---
 
