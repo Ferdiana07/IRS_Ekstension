@@ -84,10 +84,11 @@ export const UNDIP_SELECTORS = {
    */
   COURSE_POPOVER_ATTR: 'data-content',
 
-  // ── Confirmation Modal (CONFIRMED from screenshots) ────────
-  MODAL: '.modal.show, .modal[style*="display: block"], .modal[style*="display:block"]',
-  MODAL_TITLE: '.modal-title, .modal-header h4, .modal-header h5',
-  MODAL_BODY: '.modal-body',
+  // ── Confirmation Modal (CONFIRMED from screenshots & HTML snippet) ──
+  // Supports both Bootstrap modals and SweetAlert2
+  MODAL: '.modal.show, .modal[style*="display: block"], .modal[style*="display:block"], .swal2-container.swal2-shown, .swal2-popup',
+  MODAL_TITLE: '.modal-title, .modal-header h4, .modal-header h5, .swal2-title',
+  MODAL_BODY: '.modal-body, .swal2-content, #swal2-content',
   // Buttons found by text: "Ya" (confirm) / "Tidak" (cancel)
   MODAL_CONFIRM_TEXT: 'ya',
   MODAL_CANCEL_TEXT: 'tidak',
@@ -143,8 +144,8 @@ export function parseUndipQuotaFromPopover(dataContent: string): {
 
 // ── Text patterns ───────────────────────────────────────────────────────────
 export const UNDIP_MODAL_TEXTS = {
-  TITLE: 'Konfirmasi IRS',
-  BODY_KEYWORD: 'ingin memilih mata kuliah',
+  TITLE: 'konfirmasi',
+  BODY_KEYWORD: 'memilih',
   CONFIRM: 'ya',
   CANCEL: 'tidak',
 };

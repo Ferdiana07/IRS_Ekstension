@@ -29,6 +29,10 @@ export interface SaveConfigMessage {
   config: AutomationConfig;
 }
 
+export interface ScanCoursesMessage {
+  type: 'SCAN_COURSES';
+}
+
 // --------------- Background → Content ---------------
 
 export interface ContentStartMessage {
@@ -93,11 +97,13 @@ export type PopupToBackgroundMessage =
   | StopWarMessage
   | GetStatusMessage
   | GetConfigMessage
-  | SaveConfigMessage;
+  | SaveConfigMessage
+  | ScanCoursesMessage;
 
 export type BackgroundToContentMessage =
   | ContentStartMessage
-  | ContentStopMessage;
+  | ContentStopMessage
+  | ScanCoursesMessage;
 
 export type ContentToBackgroundMessage =
   | StateUpdateMessage

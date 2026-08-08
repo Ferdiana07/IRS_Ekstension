@@ -291,32 +291,63 @@ class WarEngine {
 let engine: WarEngine | null = null;
 
 chrome.runtime.onMessage.addListener((message: BackgroundToContentMessage, _sender, sendResponse) => {
-  if (message.type === 'CONTENT_START') {
-    if (engine) engine.stop();
-    const adapter = createAdapter();
-    engine = new WarEngine(adapter);
+  switch (message.type) {
+    case 'CONTENT_START':
+      Logger.info('Starting War Engine...');
+      if (engine) engine.stop();
+      const adapter = createAdapter();
+      engine = new WarEngine(adapter);
 
-    // Forward logger events to background
-    Logger.onLog((entry) => {
-      notifyBackground({
-        type: 'LOG',
-        level: entry.level,
-        text: entry.text,
-        timestamp: entry.timestamp,
+      Logger.onLog((entry) => {
+        notifyBackground({
+          type: 'LOG',
+          level: entry.level,
+          text: entry.text,
+          timestamp: entry.timestamp,
+        });
       });
-    });
 
-    Logger.setDebugMode(message.config.settings.debugMode);
-    engine.run(message.config).catch((err: unknown) => {
-      Logger.error(`Engine: Unhandled error — ${err}`);
-    });
+      Logger.setDebugMode(message.config.settings.debugMode);
+      engine.run(message.config).catch((err: unknown) => {
+        Logger.error(`Engine: Unhandled error — ${err}`);
+      });
+      sendResponse({ ok: true });
+      break;
 
-    sendResponse({ ok: true });
-  }
+    case 'CONTENT_STOP':
+    case 'EMERGENCY_STOP':
+      Logger.info('Stopping War Engine...');
+      engine?.stop();
+      sendResponse({ ok: true });
+      break;
 
-  if (message.type === 'CONTENT_STOP') {
-    engine?.stop();
-    sendResponse({ ok: true });
+    case 'SCAN_COURSES': {
+      try {
+        const adapter = createAdapter();
+        const detected = adapter.detectCourses();
+        // Group by course name
+        const coursesMap = new Map<string, Set<string>>();
+        for (const c of detected) {
+          if (!coursesMap.has(c.name)) {
+            coursesMap.set(c.name, new Set());
+          }
+          if (c.className) {
+            coursesMap.get(c.name)!.add(c.className);
+          }
+        }
+        
+        // Convert to array
+        const result = Array.from(coursesMap.entries()).map(([name, classesSet]) => ({
+          name,
+          classes: Array.from(classesSet).sort()
+        })).sort((a, b) => a.name.localeCompare(b.name));
+
+        sendResponse({ ok: true, courses: result });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+      break;
+    }
   }
 
   return true; // keep channel open for async

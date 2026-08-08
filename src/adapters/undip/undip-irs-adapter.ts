@@ -64,14 +64,18 @@ function findButtonByText(container: HTMLElement, text: string): HTMLElement | n
 }
 
 /**
- * Find the visible Bootstrap modal.
+ * Find the visible modal (Supports Bootstrap 4/5 and SweetAlert2).
  */
 function findVisibleModal(): HTMLElement | null {
-  // .modal.show — Bootstrap 4/5 standard
+  // 1. SweetAlert2 standard
+  const swal = document.querySelector<HTMLElement>('.swal2-container.swal2-shown, .swal2-popup');
+  if (swal) return swal;
+
+  // 2. Bootstrap .modal.show
   const byShow = document.querySelector<HTMLElement>('.modal.show');
   if (byShow) return byShow;
 
-  // Fallback: any .modal with display != none
+  // 3. Fallback: any .modal with display != none
   for (const m of document.querySelectorAll<HTMLElement>('.modal')) {
     if (window.getComputedStyle(m).display !== 'none') return m;
   }
@@ -160,7 +164,7 @@ export class UndipIRSAdapter implements IRSAdapter {
     const isNotAllowed = style.includes('cursor: not-allowed') || style.includes('cursor:not-allowed');
     const isGrey = el.classList.contains('bs-callout-grey') || el.classList.contains('grey');
 
-    if (isNotAllowed || (isGrey && !el.classList.contains('btn_unirs'))) {
+    if (isNotAllowed || isGrey) {
       // Parse popover for more detail (PENUH vs TIDAK TERSEDIA)
       const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
       const quota = parseUndipQuotaFromPopover(popoverData);
@@ -176,26 +180,21 @@ export class UndipIRSAdapter implements IRSAdapter {
       };
     }
 
-    // ── AVAILABLE: has btn_unirs + cursor:pointer + no checkmark ─────────
-    if (el.classList.contains('btn_unirs')) {
-      const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
-      const quota = parseUndipQuotaFromPopover(popoverData);
+    // ── AVAILABLE: not grey, not cursor-not-allowed, not selected ─────────
+    const popoverData = el.getAttribute(UNDIP_SELECTORS.COURSE_POPOVER_ATTR) ?? '';
+    const quota = parseUndipQuotaFromPopover(popoverData);
 
-      Logger.debug(
-        `UndipAdapter: "${course.name}" Kelas ${course.className} → AVAILABLE` +
-        (quota ? ` (${quota.current}/${quota.capacity})` : '')
-      );
-      return {
-        status: 'AVAILABLE',
-        available: true,
-        current: quota?.current,
-        capacity: quota?.capacity,
-        rawText,
-      };
-    }
-
-    Logger.debug(`UndipAdapter: "${course.name}" Kelas ${course.className} → UNKNOWN`);
-    return { status: 'UNKNOWN', available: false, rawText };
+    Logger.debug(
+      `UndipAdapter: "${course.name}" Kelas ${course.className} → AVAILABLE` +
+      (quota ? ` (${quota.current}/${quota.capacity})` : '')
+    );
+    return {
+      status: 'AVAILABLE',
+      available: true,
+      current: quota?.current,
+      capacity: quota?.capacity,
+      rawText,
+    };
   }
 
   // ── Selected Check ────────────────────────────────────────────────────────
@@ -210,14 +209,6 @@ export class UndipIRSAdapter implements IRSAdapter {
 
   async selectCourse(course: DetectedCourse): Promise<boolean> {
     const el = course.element as HTMLElement;
-
-    // Safety: must have btn_unirs class (clickable)
-    if (!el.classList.contains('btn_unirs')) {
-      Logger.warn(
-        `UndipAdapter: "${course.name}" Kelas ${course.className} is NOT btn_unirs — refusing to click`
-      );
-      return false;
-    }
 
     // Safety: must not have cursor:not-allowed
     const style = el.getAttribute('style') ?? '';
@@ -258,8 +249,17 @@ export class UndipIRSAdapter implements IRSAdapter {
     }
 
     // Find Ya / Tidak buttons by text
-    const confirmBtn = findButtonByText(modal, UNDIP_MODAL_TEXTS.CONFIRM);
-    const cancelBtn  = findButtonByText(modal, UNDIP_MODAL_TEXTS.CANCEL);
+    let confirmBtn = findButtonByText(modal, UNDIP_MODAL_TEXTS.CONFIRM);
+    let cancelBtn  = findButtonByText(modal, UNDIP_MODAL_TEXTS.CANCEL);
+
+    // Fallback: If "Ya" text isn't found, try to find the primary/success button
+    if (!confirmBtn) {
+      confirmBtn = modal.querySelector<HTMLElement>('.btn-primary, .btn-success, .btn-info, .swal2-confirm');
+      Logger.debug(`UndipAdapter: "Ya" button not found by text, fallback to primary button: ${confirmBtn ? 'FOUND' : 'MISSING'}`);
+    }
+    if (!cancelBtn) {
+      cancelBtn = modal.querySelector<HTMLElement>('.swal2-cancel');
+    }
 
     Logger.debug(
       `UndipAdapter: IRS modal confirmed — ` +

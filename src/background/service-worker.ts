@@ -81,13 +81,51 @@ chrome.runtime.onMessage.addListener(
         return true; // async response
       }
 
+      // ── SCAN COURSES ──────────────────────────────────────────────────────
+      case 'SCAN_COURSES': {
+        (async () => {
+          const irsTabs = await chrome.tabs.query({ url: ["*://*.undip.ac.id/*", "http://localhost/*"] });
+          let lastError = 'No active tab found';
+          
+          for (const tab of irsTabs) {
+            if (!tab.id) continue;
+            try {
+              const result = await chrome.tabs.sendMessage(tab.id, { type: 'SCAN_COURSES' });
+              if (result && result.ok) {
+                sendResponse(result);
+                return;
+              }
+            } catch (err) {
+              lastError = String(err);
+            }
+          }
+
+          // Fallback if none of the url-matched tabs responded successfully
+          const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (activeTabs[0]?.id) {
+            try {
+              const result = await chrome.tabs.sendMessage(activeTabs[0].id, { type: 'SCAN_COURSES' });
+              sendResponse(result);
+              return;
+            } catch (err) {
+              lastError = String(err);
+            }
+          }
+
+          sendResponse({ ok: false, error: lastError });
+        })();
+        return true;
+      }
+
       // ── STOP WAR ─────────────────────────────────────────────────────────
       case 'STOP_WAR': {
         (async () => {
           warStatus.state = WarState.STOPPED;
-          const tab = await getActiveIRSTab();
-          if (tab?.id) {
-            await chrome.tabs.sendMessage(tab.id, { type: 'CONTENT_STOP' }).catch(() => {});
+          const irsTabs = await chrome.tabs.query({ url: ["*://*.undip.ac.id/*", "http://localhost/*"] });
+          for (const tab of irsTabs) {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, { type: 'CONTENT_STOP' }).catch(() => {});
+            }
           }
           sendResponse({ ok: true });
         })();
@@ -176,10 +214,12 @@ chrome.runtime.onMessage.addListener((message: Record<string, unknown>, _sender,
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'emergency-stop') {
     warStatus.state = WarState.STOPPED;
-    const tab = await getActiveIRSTab();
-    if (tab?.id) {
-      await chrome.tabs.sendMessage(tab.id, { type: 'EMERGENCY_STOP' }).catch(() => {});
-      await chrome.tabs.sendMessage(tab.id, { type: 'CONTENT_STOP' }).catch(() => {});
+    const irsTabs = await chrome.tabs.query({ url: ["*://*.undip.ac.id/*", "http://localhost/*"] });
+    for (const tab of irsTabs) {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, { type: 'EMERGENCY_STOP' }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: 'CONTENT_STOP' }).catch(() => {});
+      }
     }
   }
 });

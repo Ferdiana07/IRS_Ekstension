@@ -175,6 +175,80 @@ document.getElementById('btn-add-course')!.addEventListener('click', () => {
   inputs[inputs.length - 1]?.focus();
 });
 
+// ── Scanning ───────────────────────────────────────────────────────────────
+
+const btnScan = document.getElementById('btn-scan-courses') as HTMLButtonElement;
+const scanContainer = document.getElementById('scan-results-container')!;
+const scanList = document.getElementById('scan-results-list')!;
+const btnCloseScan = document.getElementById('btn-close-scan')!;
+const btnAddScanned = document.getElementById('btn-add-scanned')!;
+
+btnScan.addEventListener('click', async () => {
+  btnScan.disabled = true;
+  btnScan.textContent = 'Memindai...';
+  scanList.innerHTML = '<div style="padding:12px;text-align:center">Memindai halaman IRS...</div>';
+  scanContainer.style.display = 'block';
+
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'SCAN_COURSES' }) as { ok: boolean, courses?: any[], error?: string };
+    
+    if (!response || !response.ok) {
+      throw new Error(response?.error || 'Pastikan kamu sedang membuka halaman IRS dan sudah di-refresh (F5).');
+    }
+
+    const courses = response.courses || [];
+    if (courses.length === 0) {
+      scanList.innerHTML = '<div style="padding:12px;text-align:center;color:var(--clr-danger)">Tidak ada mata kuliah yang terdeteksi di halaman kalender.</div>';
+    } else {
+      scanList.innerHTML = courses.map((c, i) => `
+        <label style="display:flex; align-items:center; gap:8px; padding:8px; background:var(--clr-surface2); border-radius:4px; cursor:pointer;">
+          <input type="checkbox" class="scan-checkbox" data-index="${i}" data-name="${escHtml(c.name)}" data-classes="${escHtml(c.classes.join(','))}" />
+          <div>
+            <div style="font-weight:600; font-size:13px">${escHtml(c.name)}</div>
+            <div style="font-size:11px; color:var(--clr-text-muted)">Kelas: ${escHtml(c.classes.join(', '))}</div>
+          </div>
+        </label>
+      `).join('');
+    }
+  } catch (err) {
+    scanList.innerHTML = `<div style="padding:12px;color:var(--clr-danger);font-size:12px">Gagal memindai: ${err}</div>`;
+  } finally {
+    btnScan.disabled = false;
+    btnScan.textContent = '🔍 Pindai Mata Kuliah dari Halaman';
+  }
+});
+
+btnCloseScan.addEventListener('click', () => {
+  scanContainer.style.display = 'none';
+});
+
+btnAddScanned.addEventListener('click', () => {
+  const checkboxes = scanList.querySelectorAll<HTMLInputElement>('.scan-checkbox:checked');
+  if (checkboxes.length === 0) return;
+
+  checkboxes.forEach((cb) => {
+    const name = cb.dataset['name']!;
+    const classes = cb.dataset['classes']!.split(',');
+    
+    // Check if already exists
+    if (config.courses.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      return;
+    }
+
+    config.courses.push({
+      id: generateId(),
+      name: name,
+      code: undefined,
+      preferredClasses: classes.length > 0 && classes[0] !== '' ? classes : ['A'],
+      priority: config.courses.length + 1,
+      enabled: true,
+    });
+  });
+
+  renderCourseList();
+  scanContainer.style.display = 'none';
+});
+
 // ── Mode Selection ─────────────────────────────────────────────────────────
 
 document.querySelectorAll<HTMLElement>('.mode-card').forEach((card) => {
