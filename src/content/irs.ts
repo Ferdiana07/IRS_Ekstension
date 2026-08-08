@@ -7,6 +7,7 @@ import type { CourseTarget, AttemptRecord, AttemptResult } from '../types/course
 import type { BackgroundToContentMessage } from '../types/message';
 
 import { MockIRSAdapter } from '../adapters/mock/mock-irs-adapter';
+import { UndipIRSAdapter } from '../adapters/undip/undip-irs-adapter';
 import type { IRSAdapter } from '../adapters/adapter';
 
 import { stateMachine, WarState } from './state-machine';
@@ -34,14 +35,22 @@ import Logger from '../utils/logger';
 // import { UndipIRSAdapter } from '../adapters/undip/undip-irs-adapter';
 
 function createAdapter(): IRSAdapter {
-  // Auto-detect: use MockAdapter when on localhost/file:// (mock-irs), UndipAdapter otherwise
   const hostname = window.location.hostname;
+  const pathname = window.location.pathname;
+
+  // Use UndipIRSAdapter on the real UNDIP IRS page
+  if (hostname.includes('siap.undip.ac.id') || hostname.includes('krs.undip.ac.id')) {
+    Logger.info(`Using UndipIRSAdapter (${hostname}${pathname})`);
+    return new UndipIRSAdapter();
+  }
+
+  // Use MockAdapter on localhost/file:// (mock-irs testing)
   if (hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1') {
     Logger.info('Using MockIRSAdapter (localhost/file)');
     return new MockIRSAdapter();
   }
-  // For production: return new UndipIRSAdapter();
-  Logger.warn('UndipIRSAdapter not yet implemented — falling back to MockIRSAdapter');
+
+  Logger.warn(`Unknown host "${hostname}" — falling back to MockIRSAdapter`);
   return new MockIRSAdapter();
 }
 

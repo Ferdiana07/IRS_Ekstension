@@ -24,6 +24,7 @@
   "content_scripts": [
     {
       "matches": [
+        "https://siap.undip.ac.id/*",
         "https://krs.undip.ac.id/*",
         "https://akademik.undip.ac.id/*",
         "http://localhost/*",
@@ -40,6 +41,7 @@
     "activeTab"
   ],
   "host_permissions": [
+    "https://siap.undip.ac.id/*",
     "https://krs.undip.ac.id/*",
     "https://akademik.undip.ac.id/*",
     "http://localhost/*"

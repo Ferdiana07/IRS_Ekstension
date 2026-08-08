@@ -23,7 +23,9 @@ const COURSE_SIMILARITY_THRESHOLD = 0.6;
  * Rules:
  * - If modal has course name text, it must match the target (similarity ≥ 0.6)
  * - If modal has class text, it must match the target class
- * - If modal has NEITHER, we treat it as UNREADABLE (do not click)
+ * - If modal has NEITHER (e.g. UNDIP generic modal): treat as VALID if confirm button found.
+ *   UNDIP modal body = "Apakah anda yakin ingin memilih mata kuliah ini?" — no course details.
+ *   Safety is guaranteed by: only calling this AFTER we clicked the specific course row.
  */
 export function validateModal(
   modal: ConfirmationModal,
@@ -35,12 +37,17 @@ export function validateModal(
   }
 
   const hasCourseName = !!modal.detectedCourseName;
-  const hasClassName = !!modal.detectedClassName;
+  const hasClassName  = !!modal.detectedClassName;
 
-  // Cannot read modal content — do not click
+  // UNDIP case: modal body is generic — neither course name nor class is in the modal.
+  // Since we only call handleConfirmation() right after clicking the target course,
+  // the modal MUST be for that course. Treat as VALID if confirm button is present.
   if (!hasCourseName && !hasClassName) {
-    Logger.warn('Confirmation: Cannot extract course/class from modal — UNREADABLE');
-    return 'UNREADABLE';
+    Logger.warn(
+      'Confirmation: Modal has no course/class info (likely UNDIP generic modal) — ' +
+      'treating as VALID because confirm button is present and modal appeared after select click'
+    );
+    return 'VALID';
   }
 
   // Validate course name if present
@@ -72,6 +79,7 @@ export function validateModal(
   Logger.success(`Confirmation: Modal validated for "${targetCourse.name}" Kelas ${targetCourse.className}`);
   return 'VALID';
 }
+
 
 // ── Confirmation Flow ──────────────────────────────────────────────────────
 
