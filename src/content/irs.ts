@@ -207,7 +207,11 @@ class WarEngine {
         }
 
         const result = await this.processCourse(target);
-        anyActionTaken = true;
+        
+        // Only consider an action taken if it wasn't just skipping an unavailable course
+        if (result !== 'UNAVAILABLE' && result !== 'UNKNOWN') {
+          anyActionTaken = true;
+        }
 
         if (result === 'STOPPED') {
           stateMachine.transition(WarState.STOPPED);
@@ -257,12 +261,22 @@ class WarEngine {
           Logger.warn('Engine: Too many idle cycles — stopping to prevent infinite loop');
           break;
         }
+
+        // Auto-Refresh Logic
+        if (settings.autoRefresh) {
+          Logger.info(`Engine: Auto-Refresh enabled. Reloading page in ${settings.autoRefreshInterval / 1000}s...`);
+          await sleep(settings.autoRefreshInterval);
+          if (isStopped()) break;
+          Logger.debug('Engine: Reloading window now...');
+          window.location.reload();
+          return; // Stop current engine loop since page is reloading
+        }
       } else {
         idleCycles = 0;
       }
 
-      // Yield between full scan cycles
-      if (!isStopped()) {
+      // Yield between full scan cycles (if not auto-refreshing, or if action WAS taken)
+      if (!isStopped() && (!settings.autoRefresh || anyActionTaken)) {
         await sleep(settings.scanInterval);
       }
     }
@@ -304,6 +318,14 @@ chrome.runtime.onMessage.addListener((message: BackgroundToContentMessage, _send
           level: entry.level,
           text: entry.text,
           timestamp: entry.timestamp,
+        });
+      });
+
+      // Forward all state machine transitions to the background script
+      stateMachine.onChange((state) => {
+        notifyBackground({
+          type: 'STATE_UPDATE',
+          state,
         });
       });
 
@@ -375,3 +397,14 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 Logger.info('IRS WAR ASSISTANT content script loaded');
+
+// ── Auto-Resume on Page Load ──────────────────────────────────────────────
+setTimeout(() => {
+  try {
+    chrome.runtime.sendMessage({ type: 'CHECK_AUTO_RESUME' }).catch(() => {
+      // background might not be listening, which is fine
+    });
+  } catch (err) {
+    // context might be invalidated
+  }
+}, 500);

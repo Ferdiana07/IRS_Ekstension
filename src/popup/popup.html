@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IRS WAR ASSISTANT</title>
+  <title>Jamal Gemblung IRS</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
   <header class="header">
     <div class="header-logo">🎓</div>
     <div class="header-text">
-      <div class="header-title">IRS WAR ASSISTANT</div>
+      <div class="header-title">Jamal Gemblung IRS</div>
       <div class="header-subtitle">UNDIP — Automated Course Selection</div>
     </div>
     <button class="header-options-btn" id="btn-options" title="Settings">⚙</button>
@@ -29,7 +29,7 @@
     </div>
 
     <div class="status-counters">
-      <div class="counter-item">
+      <div class="counter-item" title="Lihat daftar di bawah">
         <div class="counter-value" id="count-target">0</div>
         <div class="counter-label">Target</div>
       </div>
@@ -45,6 +45,10 @@
         <div class="counter-value" id="count-skipped">0</div>
         <div class="counter-label">SKIP</div>
       </div>
+    </div>
+    
+    <div id="target-list" style="font-size: 10px; color: var(--clr-text-muted); margin-top: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px;">
+      <!-- Target names will be shown here -->
     </div>
   </section>
 
@@ -88,10 +92,11 @@
     </div>
   </div>
 
-  <!-- Footer -->
   <footer class="footer">
-    <div class="footer-mode">Mode: <span id="footer-mode">Assisted</span></div>
-    <div class="footer-shortcut">Ctrl+Shift+X = STOP</div>
+    <div style="width: 100%; text-align: center; margin-top: 8px; font-size: 10px; color: var(--clr-text-muted); padding-top: 4px; border-top: 1px solid var(--clr-border);">
+      By <strong>Jamal Gemblung</strong><br>
+      <i>"Gunakan dengan bijak ya, SALAM WARAS"</i>
+    </div>
   </footer>
 
   <script type="module" src="popup.ts"></script>

@@ -1,7 +1,8 @@
 {
-  "name": "irs-war-assistant",
+  "name": "jamal-gemblung-irs",
   "version": "1.0.0",
-  "description": "Chrome Extension untuk otomasi pemilihan IRS UNDIP — IRS WAR ASSISTANT",
+  "description": "Chrome Extension untuk otomasi pemilihan IRS UNDIP — Jamal Gemblung IRS",
+  "author": "Jamal Gemblung",
   "private": true,
   "scripts": {
     "dev": "vite build --watch",

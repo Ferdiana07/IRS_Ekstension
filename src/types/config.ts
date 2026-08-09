@@ -24,6 +24,10 @@ export interface WarSettings {
   enableNotifications: boolean;
   /** Enable verbose debug logging */
   debugMode: boolean;
+  /** Enable auto-refresh on the courses page */
+  autoRefresh: boolean;
+  /** Auto-refresh interval in ms (default: 5000) */
+  autoRefreshInterval: number;
   /** Automation mode (default: 'assisted') */
   automationMode: AutomationMode;
   /** Allow final IRS submission (only relevant in 'full' mode) */
@@ -44,6 +48,8 @@ export const DEFAULT_SETTINGS: WarSettings = {
   enableSound: true,
   enableNotifications: true,
   debugMode: false,
+  autoRefresh: false,
+  autoRefreshInterval: 5000,
   automationMode: 'assisted',
   enableFinalSubmission: false,
   finalSubmissionCountdown: 10,

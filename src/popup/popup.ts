@@ -23,7 +23,6 @@ const btnOptions    = document.getElementById('btn-options') as HTMLButtonElemen
 const btnClearLog   = document.getElementById('btn-clear-log') as HTMLButtonElement;
 const warComplete   = document.getElementById('war-complete')!;
 const warCompleteStats = document.getElementById('war-complete-stats')!;
-const footerMode    = document.getElementById('footer-mode')!;
 
 // ── State ──────────────────────────────────────────────────────────────────
 let isRunning = false;
@@ -63,6 +62,15 @@ function applyStatus(status: WarStatus): void {
   countSuccess.textContent = String(status.successCount);
   countFailed.textContent  = String(status.failedCount);
   countSkipped.textContent = String(status.skippedCount);
+
+  const targetList = document.getElementById('target-list')!;
+  if (status.targetNames && status.targetNames.length > 0) {
+    targetList.textContent = '🎯 ' + status.targetNames.join(', ');
+    targetList.title = status.targetNames.join('\n');
+  } else {
+    targetList.textContent = '';
+    targetList.title = '';
+  }
 
   if (status.currentCourse) {
     currentCourse.innerHTML = `<strong>${status.currentCourse}</strong>`;
@@ -152,7 +160,7 @@ async function loadMode(): Promise<void> {
         full: 'Full Auto',
         safe: 'Safe',
       };
-      footerMode.textContent = modeMap[response.config.settings.automationMode] ?? 'Assisted';
+      // Mode text removed from UI
     }
   } catch { /* ignore */ }
 }

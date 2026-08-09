@@ -74,12 +74,13 @@ export interface WarCompleteMessage {
 
 export interface WarStatus {
   state: WarState;
-  currentCourse?: string;
-  currentClass?: string;
   totalTargets: number;
+  targetNames?: string[];
   successCount: number;
   failedCount: number;
   skippedCount: number;
+  currentCourse?: string;
+  currentClass?: string;
   logs: LogEntry[];
   records: AttemptRecord[];
 }

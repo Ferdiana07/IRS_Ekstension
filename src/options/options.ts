@@ -291,6 +291,12 @@ bindSetting('toggle-sound', 'enableSound', 'boolean');
 bindSetting('toggle-notifications', 'enableNotifications', 'boolean');
 bindSetting('toggle-debug', 'debugMode', 'boolean');
 bindSetting('toggle-final-submit', 'enableFinalSubmission', 'boolean');
+bindSetting('toggle-auto-refresh', 'autoRefresh', 'boolean');
+
+const refreshIntervalInput = document.getElementById('input-refresh-interval') as HTMLSelectElement;
+refreshIntervalInput?.addEventListener('change', () => {
+  config.settings.autoRefreshInterval = (parseInt(refreshIntervalInput.value) || 5) * 1000;
+});
 
 // ── Save ───────────────────────────────────────────────────────────────────
 
@@ -345,6 +351,12 @@ async function loadConfig(): Promise<void> {
       (document.getElementById('toggle-notifications') as HTMLInputElement).checked = config.settings.enableNotifications;
       (document.getElementById('toggle-debug') as HTMLInputElement).checked = config.settings.debugMode;
       (document.getElementById('toggle-final-submit') as HTMLInputElement).checked = config.settings.enableFinalSubmission;
+      (document.getElementById('toggle-auto-refresh') as HTMLInputElement).checked = config.settings.autoRefresh;
+      
+      const refreshIntervalInput = document.getElementById('input-refresh-interval') as HTMLSelectElement;
+      if (refreshIntervalInput) {
+        refreshIntervalInput.value = String(config.settings.autoRefreshInterval / 1000);
+      }
     }
   } catch { /* first run — use defaults */ }
 }

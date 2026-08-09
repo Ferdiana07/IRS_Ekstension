@@ -22,6 +22,10 @@ let warStatus: WarStatus = {
   records: [],
 };
 
+// Track which tab the war is running on
+let activeWarTabId: number | null = null;
+let lastKnownConfig: AutomationConfig | null = null;
+
 function pushLog(entry: LogEntry): void {
   warStatus.logs.push(entry);
   if (warStatus.logs.length > MAX_LOGS) {
@@ -30,10 +34,12 @@ function pushLog(entry: LogEntry): void {
 }
 
 function resetStatus(config: AutomationConfig): void {
+  lastKnownConfig = config;
   const enabled = config.courses.filter((c) => c.enabled);
   warStatus = {
     state: WarState.READY,
     totalTargets: enabled.length,
+    targetNames: enabled.map((c) => c.name),
     successCount: 0,
     failedCount: 0,
     skippedCount: 0,
@@ -67,6 +73,8 @@ chrome.runtime.onMessage.addListener(
             sendResponse({ ok: false, error: 'No active tab found' });
             return;
           }
+
+          activeWarTabId = tab.id;
 
           try {
             await chrome.tabs.sendMessage(tab.id, {
@@ -121,6 +129,7 @@ chrome.runtime.onMessage.addListener(
       case 'STOP_WAR': {
         (async () => {
           warStatus.state = WarState.STOPPED;
+          activeWarTabId = null;
           const irsTabs = await chrome.tabs.query({ url: ["*://*.undip.ac.id/*", "http://localhost/*"] });
           for (const tab of irsTabs) {
             if (tab.id) {
@@ -153,6 +162,32 @@ chrome.runtime.onMessage.addListener(
           await saveConfig(msg.config);
           sendResponse({ ok: true });
         })();
+        return true;
+      }
+
+      // ── CHECK AUTO RESUME ─────────────────────────────────────────────────
+      case 'CHECK_AUTO_RESUME': {
+        const isRunning = ![WarState.IDLE, WarState.READY, WarState.STOPPED, WarState.COMPLETED].includes(warStatus.state);
+        
+        if (
+          isRunning &&
+          activeWarTabId === _sender.tab?.id &&
+          lastKnownConfig
+        ) {
+          console.log(`[IRS-WAR] Content script requested auto-resume on tab ${_sender.tab?.id}`);
+          setTimeout(() => {
+            const stillRunning = ![WarState.IDLE, WarState.READY, WarState.STOPPED, WarState.COMPLETED].includes(warStatus.state);
+            if (stillRunning && activeWarTabId) {
+              chrome.tabs.sendMessage(activeWarTabId, {
+                type: 'CONTENT_START',
+                config: lastKnownConfig,
+              }).catch((err) => {
+                console.error(`[IRS-WAR] Failed to auto-resume engine: ${err}`);
+              });
+            }
+          }, 500); // Small delay to let DOM settle
+        }
+        sendResponse({ ok: true });
         return true;
       }
 
@@ -214,6 +249,7 @@ chrome.runtime.onMessage.addListener((message: Record<string, unknown>, _sender,
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'emergency-stop') {
     warStatus.state = WarState.STOPPED;
+    activeWarTabId = null;
     const irsTabs = await chrome.tabs.query({ url: ["*://*.undip.ac.id/*", "http://localhost/*"] });
     for (const tab of irsTabs) {
       if (tab.id) {
@@ -221,6 +257,33 @@ chrome.commands.onCommand.addListener(async (command) => {
         chrome.tabs.sendMessage(tab.id, { type: 'CONTENT_STOP' }).catch(() => {});
       }
     }
+  }
+});
+
+// ── Auto-Refresh Handler ───────────────────────────────────────────────────
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const isRunning = ![WarState.IDLE, WarState.READY, WarState.STOPPED, WarState.COMPLETED].includes(warStatus.state);
+  
+  if (
+    activeWarTabId === tabId &&
+    changeInfo.status === 'complete' &&
+    isRunning &&
+    lastKnownConfig
+  ) {
+    console.log(`[IRS-WAR] Tab ${tabId} reloaded. Resuming War Engine...`);
+    // Wait briefly for DOM to fully settle
+    setTimeout(() => {
+      const stillRunning = ![WarState.IDLE, WarState.READY, WarState.STOPPED, WarState.COMPLETED].includes(warStatus.state);
+      if (stillRunning) {
+        chrome.tabs.sendMessage(tabId, {
+          type: 'CONTENT_START',
+          config: lastKnownConfig,
+        }).catch((err) => {
+          console.error(`[IRS-WAR] Failed to resume engine after reload: ${err}`);
+        });
+      }
+    }, 1000);
   }
 });
 
